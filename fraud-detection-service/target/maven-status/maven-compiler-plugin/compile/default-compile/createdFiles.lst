@@ -1,0 +1,4 @@
+com\banking\fraud\client\AccountServiceClient.class
+com\banking\fraud\kafka\FraudDetectionEventConsumer.class
+com\banking\fraud\FraudDetectionServiceApplication.class
+com\banking\fraud\service\FraudDetectionService.class

@@ -1,0 +1,18 @@
+server:
+  port: 8084
+
+spring:
+  datasource:
+    url: jdbc:mysql://banking-mysql:3306/notification_db?createDatabaseIfNotExist=true&useSSL=false
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: banking-redis
+      port: 6379
+  kafka:
+    bootstrap-servers: banking-kafka:9092
+  ai:
+    ollama:
+      base-url: http://banking-ollama:11434
