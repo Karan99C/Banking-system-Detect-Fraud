@@ -51,6 +51,20 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - banking-network
+
+  banking-config-service:
+    build:
+      context: ./config-service
+      dockerfile: Dockerfile
+    container_name: banking-config-service
+    ports:
+      - "8888:8888"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    networks:
+      - banking-network
 
   prometheus:
     image: prom/prometheus:latest
@@ -60,6 +74,8 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - banking-network
 
   grafana:
     image: grafana/grafana:latest
@@ -69,6 +85,12 @@ services:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
+    networks:
+      - banking-network
 
 volumes:
   mysql-data:
+
+networks:
+  banking-network:
+    driver: bridge

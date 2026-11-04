@@ -18,6 +18,7 @@
     <packaging>pom</packaging>
 
     <modules>
+        <module>config-service</module>
         <module>api-gateway</module>
         <module>account-service</module>
         <module>transaction-service</module>
