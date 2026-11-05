@@ -11,5 +11,5 @@ spring:
           uri: https://github.com/Karan99C/Banking-system-Detect-Fraud.git
           search-paths: config-repo
           default-label: main
-          timeout: 5
-          clone-on-start: true
+          clone-on-start: false
+          timeout: 10

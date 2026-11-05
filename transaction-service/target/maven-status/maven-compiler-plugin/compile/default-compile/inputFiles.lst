@@ -1,5 +1,7 @@
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\transaction-service\src\main\java\com\banking\transaction\client\AccountServiceClient.java
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\transaction-service\src\main\java\com\banking\transaction\client\TransactionServiceClient.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\transaction-service\src\main\java\com\banking\transaction\config\GatewayHeaderAuthenticationFilter.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\transaction-service\src\main\java\com\banking\transaction\config\SecurityConfig.java
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\transaction-service\src\main\java\com\banking\transaction\controller\ApiExceptionHandler.java
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\transaction-service\src\main\java\com\banking\transaction\controller\TransactionController.java
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\transaction-service\src\main\java\com\banking\transaction\dto\AccountStatus.java

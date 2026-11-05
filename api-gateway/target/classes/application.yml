@@ -1,6 +1,10 @@
 server:
   port: 8080
 
+jwt:
+  secret: FutureTrustBank-Development-Secret-Key-2026-Change-Me
+  expiration-ms: 3600000
+
 spring:
   application:
     name: api-gateway

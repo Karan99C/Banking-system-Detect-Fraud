@@ -108,7 +108,7 @@ export const apiClient = axios.create({
 })
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('banking_token')
+  const token = localStorage.getItem('banking_token') || localStorage.getItem('futuretrust_token')
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`

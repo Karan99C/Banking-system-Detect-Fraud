@@ -1,2 +1,8 @@
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\api-gateway\src\main\java\com\banking\gateway\ApiGatewayApplication.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\api-gateway\src\main\java\com\banking\gateway\config\GatewaySecurityConfig.java
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\api-gateway\src\main\java\com\banking\gateway\config\RemoteAddressKeyResolverConfig.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\api-gateway\src\main\java\com\banking\gateway\controller\AuthController.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\api-gateway\src\main\java\com\banking\gateway\dto\AuthResponse.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\api-gateway\src\main\java\com\banking\gateway\dto\LoginRequest.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\api-gateway\src\main\java\com\banking\gateway\security\JwtAuthenticationFilter.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\api-gateway\src\main\java\com\banking\gateway\security\JwtTokenService.java

@@ -21,7 +21,7 @@ import {
   Zap
 } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
-import { Link, NavLink, Route, Routes, useParams } from 'react-router-dom'
+import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import {
   Area,
   AreaChart,
@@ -33,6 +33,7 @@ import {
   XAxis,
   YAxis
 } from 'recharts'
+import LoginPage from './components/LoginPage'
 import { insightCards, landingHighlights, navItems } from './data/mockData'
 import { useFraudAlertStream } from './hooks/useFraudAlertStream'
 import { useSagaProgress } from './hooks/useSagaProgress'
@@ -124,6 +125,7 @@ const storyCheckpoints = [
 
 function App() {
   const { toasts } = useSelector((state) => state.dashboard)
+  const { isAuthenticated, user } = useSelector((state) => state.auth)
 
   useEffect(() => {
     document.title = 'FutureTrust Bank | Intelligent Banking & Real-Time Fraud Defense'
@@ -141,6 +143,19 @@ function App() {
   useFraudAlertStream(true)
   useSagaProgress('txn-9001', true)
 
+  const ProtectedRoute = ({ children, allowedRoles = ['ROLE_CUSTOMER', 'ROLE_COMPLIANCE'] }) => {
+    if (!isAuthenticated) {
+      return <Navigate to="/login" replace />
+    }
+
+    const activeRole = user?.role || 'ROLE_CUSTOMER'
+    if (!allowedRoles.includes(activeRole)) {
+      return <Navigate to={activeRole === 'ROLE_COMPLIANCE' ? '/fraud-cases' : '/dashboard'} replace />
+    }
+
+    return children
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
@@ -148,15 +163,16 @@ function App() {
         <ToastStack toasts={toasts} />
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/transfer" element={<TransferPage />} />
-          <Route path="/fraud-cases" element={<FraudCasesPage />} />
-          <Route path="/fraud-cases/:id" element={<FraudCaseDetailPage />} />
-          <Route path="/pipeline" element={<PipelinePage />} />
-          <Route path="/system-health" element={<PipelinePage />} />
-          <Route path="/accounts" element={<AccountsPage />} />
-          <Route path="/transactions" element={<TransactionsPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/transfer" element={<ProtectedRoute><TransferPage /></ProtectedRoute>} />
+          <Route path="/fraud-cases" element={<ProtectedRoute allowedRoles={['ROLE_COMPLIANCE']}><FraudCasesPage /></ProtectedRoute>} />
+          <Route path="/fraud-cases/:id" element={<ProtectedRoute allowedRoles={['ROLE_COMPLIANCE']}><FraudCaseDetailPage /></ProtectedRoute>} />
+          <Route path="/pipeline" element={<ProtectedRoute><PipelinePage /></ProtectedRoute>} />
+          <Route path="/system-health" element={<ProtectedRoute><PipelinePage /></ProtectedRoute>} />
+          <Route path="/accounts" element={<ProtectedRoute><AccountsPage /></ProtectedRoute>} />
+          <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
         </Routes>
         <Footer />
       </div>

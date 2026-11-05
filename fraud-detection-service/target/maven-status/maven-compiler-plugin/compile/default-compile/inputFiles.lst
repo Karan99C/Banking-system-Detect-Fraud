@@ -1,4 +1,6 @@
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\fraud-detection-service\src\main\java\com\banking\fraud\client\AccountServiceClient.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\fraud-detection-service\src\main\java\com\banking\fraud\config\GatewayHeaderAuthenticationFilter.java
+D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\fraud-detection-service\src\main\java\com\banking\fraud\config\SecurityConfig.java
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\fraud-detection-service\src\main\java\com\banking\fraud\FraudDetectionServiceApplication.java
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\fraud-detection-service\src\main\java\com\banking\fraud\kafka\FraudDetectionEventConsumer.java
 D:\Cloud Data Engineer\Code Shuttle\Java Spring Microservices\miroservices\banking-system\fraud-detection-service\src\main\java\com\banking\fraud\service\FraudDetectionService.java

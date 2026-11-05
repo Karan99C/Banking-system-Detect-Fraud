@@ -1,5 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
 import accountReducer from './accountSlice'
+import authReducer from './authSlice'
 import dashboardReducer from './dashboardSlice'
 import fraudAlertReducer from './fraudAlertSlice'
 import transactionReducer from './transactionSlice'
@@ -9,6 +10,7 @@ export const store = configureStore({
     dashboard: dashboardReducer,
     account: accountReducer,
     transaction: transactionReducer,
-    fraudAlert: fraudAlertReducer
+    fraudAlert: fraudAlertReducer,
+    auth: authReducer
   }
 })
