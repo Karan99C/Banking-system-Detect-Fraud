@@ -1,514 +1,290 @@
-# Digital Banking & Real-Time Fraud Detection System
+﻿# FutureTrust Bank — Distributed Digital Banking Platform
 
-A distributed, event-driven banking platform built with Java 21, Spring Boot 3.3.x, Kafka, Redis, MySQL, and optional local AI assistance via Spring AI + Ollama. The system models a realistic digital banking workflow where money movement, fraud detection, OTP verification, account lockouts, and customer support all happen across independent services.
+A distributed banking platform that demonstrates how a modern digital bank can combine account management, secure money movement, fraud monitoring, event-driven integration, and customer alerting across multiple Spring Boot services.
+
+This repository is the backend and frontend implementation of a demo system built around the real operating patterns of a bank: protected transfers, OTP verification, risk checks, account lockouts, notification events, and compensation when a transaction must be reversed.
 
 ## Overview
 
-This project demonstrates a production-like microservice architecture for:
+FutureTrust Bank is modeled as a microservice ecosystem with clear domain ownership:
 
-- Real-time fraud checks on transfers and money movement
-- Distributed balance consistency across services
-- Step-up verification with OTP and account lockout enforcement
-- Async event-driven orchestration using Kafka
-- Resilient compensation handling through a SAGA-style refund flow
-- AI-powered customer assistance for banking questions, policy explanations, and account review
+- Account management and balance tracking live in the account domain.
+- Transfer orchestration and verification live in the transaction domain.
+- Fraud detection and velocity checks are handled as independent risk workflows.
+- Payment outcomes and downstream settlement events are emitted asynchronously.
+- Customer alerts are sent by a notification service driven by Kafka events.
+- The frontend is a React application that presents the bank experience without exposing the internal service choreography.
 
-The application is designed to show how a banking platform can keep security, reliability, and operational visibility while distributing responsibilities across separate services.
+The repository intentionally keeps technical internals visible in code and infrastructure, while the UI presents them as a polished banking experience.
 
----
+## Architecture summary
 
-## System goals and problem statements
+```mermaid
+flowchart LR
+    User[Customer / Branch staff] --> FE[banking-frontend\nReact + Vite]
+    FE --> GW[api-gateway\nSpring Cloud Gateway]
+    GW --> AC[account-service]
+    GW --> TX[transaction-service]
+    GW --> PY[payment-service]
 
-The platform solves a few core banking challenges:
+    TX --> KAFKA[(Kafka)]
+    AC --> MySQL[(MySQL)]
+    TX --> Redis[(Redis)]
+    KAFKA --> FR[fraud-detection-service]
+    KAFKA --> NS[notification-service]
+    FR --> KAFKA
+    NS --> User
 
-1. Real-time fraud prevention
-   - Rapid transaction spikes trigger fraud investigation
-   - Unusual or repeated transactions can be blocked or escalated automatically
+    CF[config-service] --> AC
+    CF --> TX
+    CF --> FR
+    CF --> PY
+    CF --> GW
+```
 
-2. Distributed consistency without central database locking
-   - Account state, balances, and transaction records are separated across services
-   - Kafka and transaction state transitions help keep the flow consistent and auditable
+## Service map
 
-3. Secure transaction confirmation
-   - OTP generation and verification are required for sensitive transfers
-   - Repeated wrong OTP attempts trigger a lockout policy to stop abuse
-
-4. Recovery from partial failure
-   - If a transfer fails after initial debit-like steps, the system triggers a compensating refund flow to restore consistency
-
-5. Customer support and self-service assistance
-   - A local LLM-backed assistant can answer account, transfer, and policy questions in plain English
-
----
-
-## Architecture at a glance
-
-### Service breakdown
-
-| Service | Responsibility | Primary patterns | Port |
+| Service | Purpose | Port | Notes |
 | --- | --- | --- | --- |
-| `api-gateway` | Unified entry point; routes requests to internal services | Spring Cloud Gateway / OpenFeign integration | `8080` |
-| `account-service` | Account creation, lookup, balance queries, status transitions, lock state | JPA + MySQL, Redis lock metadata, status checks | `8081` |
-| `transaction-service` | Initiates transfers, stores transaction state, generates OTPs, verifies OTP, handles refunds | State machine, Kafka producer/consumer, Redis OTP tracking | `8082` |
-| `payment-service` | Payment settlement / downstream fulfillment processes | Event-driven payment flow | `8083` |
-| `fraud-detection-service` | Checks transaction velocity / suspicious patterns | Redis counters, Kafka event consumer | `8084` |
-| `notification-service` | Sends OTP alerts, fraud notices, refund and status updates | Kafka-driven notifications | `8085` |
-| `ai-assistant-service` / AI module | Customer-facing banking assistant using LLM + tool calling | Spring AI, Ollama, RAG/context retrieval | Optional |
+| `config-service` | Spring Cloud Config server | 8888 | Loads configuration from the `config-repo` Git-backed repository |
+| `api-gateway` | Unified external API entry point | 8080 | Routes requests to account, transaction, and payment services |
+| `account-service` | Account lifecycle, balances, activation/blocking | 8081 | Owns account state and balance mutation |
+| `transaction-service` | Transfer orchestration, OTP checks, expiry handling | 8082 | Publishes Kafka events and manages transaction status |
+| `fraud-detection-service` | Transaction risk evaluation | 8084 | Checks velocity, unusual amounts, and balance-based anomalies |
+| `payment-service` | Payment settlement and event completion | 8083 | Emits payment success/failure signals |
+| `notification-service` | Alerts and customer notifications | 8085 | Consumes Kafka topics for OTP, fraud, and refund events |
+| `banking-frontend` | React banking dashboard and landing experience | 5173 (dev) | Uses Redux state and mock fallback logic when backend is unavailable |
 
-### High-level communication model
+## Technology stack
 
-```text
-                     ┌──────────────────────┐
-                     │      Client App      │
-                     │  Web / Mobile / API  │
-                     └──────────┬───────────┘
-                                │ HTTP
-                                ▼
-                     ┌──────────────────────┐
-                     │    api-gateway       │
-                     │  Route + auth + fanout │
-                     └───────┬──────────────┘
-                             │
-         ┌───────────────────┼──────────────────────┐
-         │                   │                      │
-         │                   ▼                      ▼
-         │      ┌─────────────────────┐   ┌─────────────────────┐
-         │      │  account-service    │   │ transaction-service │
-         │      │  Account + balance   │   │ Transfer + OTP +    │
-         │      │  + lock state        │   │ state management    │
-         │      └──────────┬──────────┘   └──────────┬──────────┘
-         │                 │                         │
-         │                 │ OpenFeign / REST        │ Kafka events
-         │                 │                         │
-         │                 ▼                         ▼
-         │        ┌─────────────────────┐   ┌─────────────────────┐
-         │        │ fraud-detection     │   │ notification-service│
-         │        │ service              │   │ OTP + alerts +      │
-         │        │ risk scoring        │   │ refunds             │
-         │        └─────────────────────┘   └─────────────────────┘
-         │
-         └───────────────────────────────┬───────────────────────────────┘
-                                         │
-                                         ▼
-                             ┌─────────────────────┐
-                             │ payment-service     │
-                             │ settlement / result │
-                             └─────────────────────┘
+| Layer | Stack |
+| --- | --- |
+| Runtime | Java 21, Spring Boot 3.3.x |
+| API Gateway | Spring Cloud Gateway |
+| Service orchestration | Spring Boot, REST, `@RestController`, Kafka integration |
+| Persistence | MySQL, Redis |
+| Messaging | Apache Kafka + ZooKeeper |
+| Observability | Prometheus, Grafana |
+| Frontend | React 19, Vite, Redux Toolkit, React Router, Tailwind CSS |
+| UI motion | Framer Motion |
+| HTTP client | Axios |
+| Build tooling | Maven, npm |
 
-                           Kafka (async events)
-                              transaction.initiated
-                              fraud.check.clean
-                              fraud.detected
-                              transaction.otp.generated
-                              transaction.completed
-                              transaction.refunded
-                              payment.completed
-                              payment.failed
+## Domain behavior and business flow
 
-                           Redis (shared state)
-                              otp:attempts:account
-                              lockout:account:{accountNumber}
-                              fraud:velocity:{accountNumber}
-                              verification:otp:{transactionId}
+### 1. Account creation and balance validation
+
+The account domain owns the master record for customers and balances. A transfer begins by validating that the sender account exists, is active, and has enough available funds.
+
+### 2. Transfer initiation
+
+When a transfer is submitted, the transaction service:
+
+1. Validates the amount and sender/receiver pair.
+2. Checks Redis-based lockout state for the sender account.
+3. Calls the account service to confirm the balance and reserve funds.
+4. Persists the transaction record.
+5. Publishes a `transaction.initiated` event to Kafka.
+
+### 3. Fraud screening
+
+The fraud-detection service listens to the transaction start event and evaluates patterns such as:
+
+- rapid transfer velocity in a short time window
+- unusually large amounts relative to historical activity
+- transactions consuming a high percentage of available balance
+
+If a risk pattern is found, the service emits `verification.required` and the transaction workflow pauses for stronger customer verification.
+
+### 4. OTP verification and lockout
+
+The transaction workflow stores OTPs in Redis with a time-to-live. If the customer enters the wrong code:
+
+- the wrong attempt count is increased
+- the account is temporarily locked after several failures
+- status is updated to notify the system that the transfer must be reversed or rejected
+- a security alert is sent through Kafka
+
+This protects against brute-force abuse and improves confidence in payment safety.
+
+### 5. Completion and compensation
+
+On successful verification, the transaction is marked complete and a `transaction.completed` event is emitted. If the process fails or the OTP expires, the system executes a compensating refund flow and emits `transaction.refunded` so ledger-side state remains consistent.
+
+## SAGA-style workflow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant TransactionSvc as transaction-service
+    participant AccountSvc as account-service
+    participant FraudSvc as fraud-detection-service
+    participant Kafka
+    participant NotificationSvc as notification-service
+
+    Client->>TransactionSvc: POST /api/v1/transactions/transfer
+    TransactionSvc->>AccountSvc: validate sender + balance
+    TransactionSvc->>TransactionSvc: create transaction record
+    TransactionSvc->>Kafka: transaction.initiated
+    Kafka->>FraudSvc: evaluate transaction risk
+    FraudSvc-->>Kafka: verification.required or fraud.check.clean
+    TransactionSvc->>Kafka: transaction.otp.generated
+    Kafka->>NotificationSvc: send OTP alert
+    Client->>TransactionSvc: POST /api/v1/transactions/{id}/verify
+    TransactionSvc-->>Kafka: transaction.completed
+    Kafka->>NotificationSvc: settlement alert
+    alt failure or expired OTP
+        TransactionSvc-->>Kafka: transaction.refunded
+        Kafka->>NotificationSvc: customer refund notice
+    end
 ```
 
-### Communication flow
+## API surface
 
-- Synchronous communication: REST + OpenFeign between services
-- Asynchronous communication: Kafka topics for events and notifications
-- Shared temporary state: Redis for OTP attempts, rate limiting, fraud counters, and lockouts
-- Persistent state: MySQL for account records, transactions, and payment data
+The platform exposes its service APIs through the gateway on port `8080`. These are the core paths currently implemented in the codebase.
 
----
+| Operation | Endpoint | Purpose |
+| --- | --- | --- |
+| Create account | `POST /api/v1/accounts` | Create a new account |
+| Get account | `GET /api/v1/accounts/{accountNumber}` | Fetch account details |
+| Get balance | `GET /api/v1/accounts/{accountNumber}/balance` | Return account balance and status |
+| Activate account | `PUT /api/v1/accounts/{accountNumber}/activate` | Activate a dormant account |
+| Block account | `PUT /api/v1/accounts/{accountNumber}/block` | Lock an account |
+| Update status | `PATCH /api/v1/accounts/{accountNumber}/status` | Transition the account status |
+| Transfer funds | `POST /api/v1/transactions/transfer` | Submit a transfer request |
+| Get transaction by id | `GET /api/v1/transactions/{id}` | Fetch a transaction record |
+| Get transaction by reference | `GET /api/v1/transactions/reference/{referenceNumber}` | Query by transfer reference |
+| Get account transactions | `GET /api/v1/transactions/account/{accountNumber}` | List transaction history |
+| Verify transaction | `POST /api/v1/transactions/{transactionId}/verify?otp=...` | Validate OTP and complete transfer |
 
-## Core resiliency and security patterns
+## Kafka topics and event flow
 
-### 1. SAGA orchestration pattern
+The repository uses the following primary Kafka topics:
 
-This application implements a banking-style SAGA workflow for money movement and failed transfers.
+| Topic | Producer | Consumer | Purpose |
+| --- | --- | --- | --- |
+| `transaction.initiated` | transaction-service | fraud-detection-service | Starts the risk-evaluation workflow |
+| `verification.required` | fraud-detection-service | transaction-service | Forces step-up verification when a transaction looks risky |
+| `fraud.check.clean` | fraud-detection-service | transaction-service | Allows transfer to continue when risk checks pass |
+| `fraud.detected` | transaction-service | account-service, notification-service | Marks a fraud signal or suspicious event |
+| `transaction.otp.generated` | transaction-service | notification-service | Sends OTP or verification notifications |
+| `transaction.completed` | transaction-service | account-service, notification-service | Confirms a completed transfer |
+| `transaction.refunded` | transaction-service | account-service, notification-service | Reverses or compensates failed or flagged flows |
+| `security.alert` | transaction-service | notification-service | Sends lockout and security alerts |
+| `payment.completed` | payment-service | notification-service | Confirms downstream payment completion |
+| `payment.failed` | payment-service | notification-service | Signals settlement failure |
 
-#### Transfer lifecycle
+## Redis usage
 
-1. Client sends a transfer request to `transaction-service`
-2. `transaction-service` validates the sender account and checks lockout state
-3. A pending transaction is created with an `OTP_REQUIRED` or `PENDING_VERIFICATION` state
-4. A 6-digit OTP is generated and stored in Redis with a TTL
-5. Kafka emits a `transaction.otp.generated` event for notification delivery
-6. Fraud service evaluates unusual behavior and emits either:
-   - `fraud.check.clean` → proceed to final verification, or
-   - `fraud.detected` → suspend or reject the flow
-7. User verifies the OTP through `POST /api/v1/transactions/{id}/verify`
-8. On success:
-   - transaction status advances to `COMPLETED`
-   - payment event is emitted
-   - funds are settled downstream
-9. On failure, expiry, or wrong OTP:
-   - transaction is marked failed
-   - compensating refund logic is triggered
-   - refund events are emitted and deduplicated to avoid double crediting
+Redis is used for fast-moving operational state rather than core customer records:
 
-This pattern makes the system fault-tolerant without requiring a single distributed transaction across all services.
+| Key pattern | Purpose |
+| --- | --- |
+| `lockout:account:{accountNumber}` | Temporary lock triggered by repeated invalid OTP attempts |
+| `otp:attempts:{accountNumber}` | Tracks OTP failure count |
+| `verification:otp:{transactionId}` | Stores the active OTP for a given transfer |
+| `fraud:velocity:{accountNumber}` | Tracks rapid transfer volume |
+| `fraud:average-amount:{accountNumber}` | Tracks recent average amount for anomaly detection |
 
-### 2. Distributed rate limiting and cooldown (Redis)
+## Infrastructure and local environment
 
-Redis is used intensively for short-lived behavioral state:
+The local environment is defined in `docker-compose.yml` and includes:
 
-- `fraud:velocity:{accountNumber}` for rapid transaction counts
-- `otp:attempts:{accountNumber}` for failed OTP attempts
-- `lockout:account:{accountNumber}` for cooldown/temporary blocking
-- `verification:otp:{transactionId}` for OTP values and expiration
+- Zookeeper
+- Kafka
+- Redis
+- MySQL
+- config-service
+- Prometheus
+- Grafana
 
-#### Business rule
-
-- If a user triggers a high volume of rapid transfers, step-up verification is required
-- After repeated invalid OTP entries, the account is blocked for a fixed period
-- The lockout logic is enforced as a security control to reduce brute-force or social-engineering abuse
-
-Example rule set:
-
-- 3 rapid transfers in a short window → step-up verification challenge
-- Wrong OTP attempts accumulate against the sender account
-- 3 failed OTP entries → account enters `LOCKED` / cooldown state for 5 hours
-- During lockdown, transfers and OTP validation are denied until manual reset or expiry
-
-### 3. Database idempotency and refund deduplication
-
-Duplicate events can happen in asynchronous systems. To keep accounting safe:
-
-- Refunds and compensation events are checked against prior processed transaction IDs
-- Duplicate refund messages are ignored if already applied once
-- Transaction state transitions are protected against reprocessing
-- A refund compensation event should be idempotent: credit once, never twice
-
-This protects the ledger from double-crediting during retry storms, duplicate Kafka delivery, or replayed events.
-
----
-
-## Spring AI and local LLM integration
-
-The project includes a banking assistant pattern built around Spring AI and a local Ollama model. This is an optional but high-value extension for customer support and self-service financial guidance.
-
-### Local LLM runtime
-
-The system is designed to run a local Ollama instance alongside the Java services, typically with a containerized service such as:
-
-```yaml
-ollama:
-  image: ollama/ollama:latest
-  container_name: banking-ollama
-  ports:
-    - "11434:11434"
-  volumes:
-    - ollama-data:/root/.ollama
-```
-
-Model used in this pattern:
-
-- `llama3.2`
-
-### Why this matters
-
-The assistant can answer customer questions like:
-
-- Why was my transfer rejected?
-- Is my money safe after a failed verification?
-- What are the limits or lockout policies?
-- What happened to my refund request?
-
-### Tool / function calling pattern
-
-The assistant is grounded in real system tools so it does not hallucinate account details. Typical tool functions:
-
-- `getAccountSummary(accountNumber)`
-- `getRecentTransactions(accountNumber, limit)`
-- `getLockoutDetails(accountNumber)`
-
-These tools let the LLM explain transaction outcomes in plain English while staying bound to real data from the banking platform.
-
-### RAG and policy context
-
-The assistant can also use a retrieval layer that contains:
-
-- transfer rules and limits
-- OTP security policy
-- fraud detection policy
-- refund and compensation guidance
-- customer support playbooks
-
-This creates a customer-safe summary such as:
-
-> “Your transfer was blocked because the transaction exceeded a velocity threshold and required step-up verification. Your funds were not transferred, and your account remains protected.”
-
----
-
-## Infrastructure and prerequisites
-
-### Required tools
-
-- Java 21 or later
-- Maven 3.9+
-- Docker and Docker Compose
-- MySQL client for verification
-- Optional: Postman, Insomnia, Thunder Client, or curl
-
-### Project structure
-
-```text
-banking-system/
-├── api-gateway/
-├── account-service/
-├── transaction-service/
-├── fraud-detection-service/
-├── payment-service/
-├── notification-service/
-├── mysql-init/
-├── docker-compose.yml
-├── pom.xml
-├── README.md
-└── ARCHITECTURE.md
-```
-
-### Start infrastructure services
-
-From the root directory:
+### Start infrastructure
 
 ```bash
 docker compose up -d
 ```
 
-This launches the base platform dependencies:
+### Run backend services
 
-- MySQL on `localhost:3306`
-- Redis on `localhost:6379`
-- Kafka on `localhost:9092`
-- Zookeeper on `localhost:2181`
-
-### Pull and verify Ollama model
-
-If you are running the optional AI support:
-
-```bash
-docker exec -it banking-ollama ollama pull llama3.2
-```
-
-Then verify it is available:
-
-```bash
-docker exec -it banking-ollama ollama list
-```
-
-### Build the project
-
-From the root directory:
+From the repo root:
 
 ```bash
 mvn clean install
-```
-
-### Run services in order
-
-```bash
+mvn spring-boot:run -pl config-service
+mvn spring-boot:run -pl api-gateway
 mvn spring-boot:run -pl account-service
 mvn spring-boot:run -pl transaction-service
-mvn spring-boot:run -pl payment-service
 mvn spring-boot:run -pl fraud-detection-service
+mvn spring-boot:run -pl payment-service
 mvn spring-boot:run -pl notification-service
-mvn spring-boot:run -pl api-gateway
 ```
 
-Typical service ports:
-
-1. `account-service` → `8081`
-2. `transaction-service` → `8082`
-3. `payment-service` → `8083`
-4. `fraud-detection-service` → `8084`
-5. `notification-service` → `8085`
-6. `api-gateway` → `8080`
-
----
-
-## End-to-end API testing guide
-
-### 1. Create accounts
-
-#### Sender account
+### Frontend
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/accounts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "accountHolderName": "Alice Johnson",
-    "email": "alice@example.com",
-    "phone": "+1234567890",
-    "accountType": "SAVINGS",
-    "initialDeposit": 10000
-  }'
+cd banking-frontend
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-#### Receiver account
+The frontend uses the following environment variables:
 
-```bash
-curl -X POST http://localhost:8081/api/v1/accounts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "accountHolderName": "Bob Smith",
-    "email": "bob@example.com",
-    "phone": "+1987654321",
-    "accountType": "CURRENT",
-    "initialDeposit": 6000
-  }'
+```env
+VITE_API_BASE_URL=http://localhost:8080/api
+VITE_USE_MOCK=true
 ```
 
-#### Check account balance / details
+When the backend is unavailable or the app is running in mock mode, the frontend automatically falls back to seeded account and transaction demo data.
 
-```bash
-curl http://localhost:8081/api/v1/accounts/{accountId}
+## Project structure
+
+```text
+banking-system/
+├── account-service/
+├── api-gateway/
+├── banking-frontend/
+├── config-repo/
+├── config-service/
+├── fraud-detection-service/
+├── mysql-init/
+├── notification-service/
+├── payment-service/
+├── transaction-service/
+├── ARCHITECTURE.md
+├── README.md
+├── docker-compose.yml
+├── pom.xml
+├── prometheus.yml
+└── .gitignore
 ```
 
-### 2. Initiate a transfer
+## Observability and operations
 
-```bash
-curl -X POST http://localhost:8082/api/v1/transactions/transfer \
-  -H "Content-Type: application/json" \
-  -d '{
-    "senderAccountNumber": "<sender-account-number>",
-    "receiverAccountNumber": "<receiver-account-number>",
-    "amount": 600,
-    "type": "TRANSFER",
-    "referenceNumber": "REF-20240601-001"
-  }'
-```
+- Prometheus is exposed at `http://localhost:9090`
+- Grafana is exposed at `http://localhost:3000`
+- The gateway is exposed at `http://localhost:8080`
+- MySQL is exposed at `localhost:3306`
+- Kafka is exposed at `localhost:9092`
+- Redis is exposed at `localhost:6379`
 
-Expected outcome:
+## Security and design notes
 
-- A transaction record is created
-- An OTP is generated and stored in Redis
-- Kafka emits `transaction.otp.generated`
-- Notification service notifies the sender
+This repository is a learning and demonstration platform. It shows patterns commonly used in secure digital banking systems, especially around:
 
-### 3. Verify OTP
+- transaction step-up verification
+- locked account recovery workflows
+- event-driven processing
+- compensation and refund handling
+- fraud review and alerting
+- observability of asynchronous operational flow
 
-#### Valid verification
+The app is deliberately structured to separate concerns so that business rules, messaging, and customer experience remain independent.
 
-```bash
-curl -X POST "http://localhost:8082/api/v1/transactions/{transactionId}/verify?otp={otp}"
-```
+## Documentation map
 
-#### Wrong OTP test
+- [ARCHITECTURE.md](ARCHITECTURE.md) — system-level design and service responsibilities
+- [banking-frontend/README.md](banking-frontend/README.md) — React app overview and frontend runtime behavior
 
-```bash
-curl -X POST "http://localhost:8082/api/v1/transactions/{transactionId}/verify?otp=000000"
-```
+## Summary
 
-This should trigger the lockout logic after the configured failed-attempt threshold.
-
-#### Expired OTP test
-
-```bash
-curl -X POST "http://localhost:8082/api/v1/transactions/{transactionId}/verify?otp={expiredOtp}"
-```
-
-### 4. Fraud check / velocity test
-
-Trigger a rapid sequence of transfers to validate suspicious behavior:
-
-```bash
-for i in $(seq 1 6); do
-  curl -s -X POST http://localhost:8082/api/v1/transactions/transfer \
-    -H "Content-Type: application/json" \
-    -d '{
-      "senderAccountNumber": "<sender-account-number>",
-      "receiverAccountNumber": "<receiver-account-number>",
-      "amount": 10,
-      "type": "TRANSFER",
-      "referenceNumber": "REF-VELOCITY-'"$i"'"
-    }' >/dev/null;
-done
-```
-
-This simulates bursty transfer traffic and should trigger the fraud-detection logic.
-
-### 5. AI chat endpoint
-
-If the assistant module is running, the chat endpoint can look like this:
-
-```bash
-curl -X POST http://localhost:8080/api/v1/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "Why was my transfer rejected and is my money safe?",
-    "accountNumber": "<account-number>",
-    "context": "customer-support"
-  }'
-```
-
-Example response:
-
-```json
-{
-  "reply": "Your transfer was rejected because the transaction exceeded a risk threshold and required additional verification. The money was not moved or debited. Your account remains protected, and the system has logged the activity for review.",
-  "riskSummary": "Velocity and OTP verification checks triggered.",
-  "accountStatus": "ACTIVE",
-  "lockoutStatus": "NONE"
-}
-```
-
-### Thunder Client / Postman examples
-
-Use the `api-gateway` route for end-to-end testing when you want a single ingress point for all services:
-
-- `POST http://localhost:8080/api/v1/accounts`
-- `GET http://localhost:8080/api/v1/accounts/{id}`
-- `POST http://localhost:8080/api/v1/transactions/transfer`
-- `POST http://localhost:8080/api/v1/transactions/{id}/verify?otp=123456`
-- `POST http://localhost:8080/api/v1/ai/chat`
-
----
-
-## Kafka topics used by the platform
-
-- `transaction.initiated`
-- `verification.required`
-- `transaction.otp.generated`
-- `fraud.check.clean`
-- `fraud.detected`
-- `transaction.completed`
-- `transaction.refunded`
-- `payment.completed`
-- `payment.failed`
-
-## Database overview
-
-- MySQL databases:
-  - `account_db`
-  - `transaction_db`
-  - `payment_db`
-- Redis: OTP, attempts, lockout, velocity counters, fraud data
-- Kafka: event sourcing / inter-service coordination
-
----
-
-## Operational notes
-
-- The system is built to be resilient under partial failure and asynchronous delays.
-- Account lockout and OTP verification are enforced as security boundaries, not just UI hints.
-- Refund and credit events use idempotent checks to prevent repeated balance crediting.
-- The application is best evaluated with infrastructure running in Docker before starting the microservices.
-
----
-
-## Project status
-
-This repository presents a modern Java microservices banking platform for learning, architecture demonstration, and platform prototyping. It is especially useful for showcasing:
-
-- event-driven architecture
-- distributed security controls
-- Java 21 + Spring Boot 3.3 pattern design
-- microservice interaction via REST and Kafka
-- local AI-assisted banking support with Ollama
-
----
-
-## License
-
-This project is intended for educational and demonstration purposes. Add your preferred license before production deployment or open-source distribution.
+FutureTrust Bank demonstrates a realistic, real-time banking architecture that combines payment orchestration, distributed state, and fraud defense. The system is designed to be understandable, event-driven, and close to the patterns used in production-grade digital banking applications.
